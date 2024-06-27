@@ -16,7 +16,6 @@
 - [Results](#results)
 - [Usage](#usage)
 - [Contributions](#contributions)
-- [License](#license)
 
 ## Overview
 Oropharyngeal cancer poses significant challenges in healthcare due to its impact on critical areas like the throat, tonsils, and base of the tongue. Traditional diagnostic methods often fall short in providing timely and accurate detection, necessitating more advanced approaches. This project leverages machine learning techniques to develop precise computational models aimed at early detection. By enhancing sensitivity and specificity through ML algorithms, this research aims to revolutionize cancer diagnosis and treatment planning, paving the way for personalized medicine and improved patient outcomes.
@@ -44,11 +43,21 @@ An ensemble of multiple classifiers including Random Forest, Gradient Boosting, 
 ### Architecture
 The project architecture follows a structured approach beginning with data preprocessing, which includes SMOTE oversampling to address class imbalance, label encoding for categorical variables, and handling missing values. Feature selection is performed using ensemble classifiers like Random Forest, Gradient Boosting, and Extra Trees, supplemented by XGBoost for ranking feature importance. The final model employs a StackingClassifier with multiple base estimators and a Logistic Regression final estimator, validated using cross-validation techniques to ensure robustness and generalizability.
 
+![image](https://github.com/sompuradhruv/Oropharyngeal-Cancer-Prediction-/assets/78086198/1fd857e5-909a-49b5-a7af-0bd54b624105)
+
+
 ### Dataset
 The dataset comprises 3,346 CT image volumes of head and neck cancer collected between 2005 and 2017 from the University Health Network (UHN) in Toronto, Canada. It includes standardized CT images and associated clinical, therapeutic, and demographic data, making it suitable for training prognostic models and quantitative imaging studies.
 
+![image](https://github.com/sompuradhruv/Oropharyngeal-Cancer-Prediction-/assets/78086198/c6116149-a18d-40ab-9a83-30eef74df73f)
+
+
 ### Model Training and Evaluation
 Models are trained using a 70-30 train-test split with Stratified Shuffle Split cross-validation. Evaluation metrics such as accuracy, precision, recall, and F1-score are computed to assess model performance across different algorithms. The ensemble model, combining Random Forest, Gradient Boosting, Extra Trees, and SVC, achieves the highest accuracy of 97.29%, underscoring its efficacy in oropharyngeal cancer detection.
+
+#### Confusion Matrix
+
+![image](https://github.com/sompuradhruv/Oropharyngeal-Cancer-Prediction-/assets/78086198/461c304e-cf58-4476-a124-6d0622e578a0)
 
 ## Results
 The following table presents the accuracies and performance metrics of various hybrid and ensemble models used:
@@ -64,11 +73,12 @@ The following table presents the accuracies and performance metrics of various h
 
 These results highlight the effectiveness of ensemble models in achieving high accuracy and robustness in oropharyngeal cancer detection tasks.
 
+![image](https://github.com/sompuradhruv/Oropharyngeal-Cancer-Prediction-/assets/78086198/a5a61e8c-3087-4825-8026-7902e2bc6b59)
+
+
 ## Usage
 Clone the repository and follow instructions in `README.md` to run models on your dataset.
 
 ## Contributions
 Contributions welcome! Fork the repository and submit pull requests.
 
-## License
-This project is licensed under the MIT License - see the LICENSE file for details.
