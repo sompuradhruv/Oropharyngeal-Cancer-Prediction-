@@ -1,0 +1,147 @@
+import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, ExtraTreesClassifier, StackingClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from imblearn.over_sampling import SMOTE
+from sklearn.feature_selection import RFE
+from sklearn.metrics import classification_report
+
+# Define function to calculate and print metrics with precision to two decimal points
+def print_metrics(model_name, y_true, y_pred):
+    metrics = classification_report(y_true, y_pred, output_dict=True)
+    print(f"Metrics for {model_name}:")
+    print(f"  Macro Avg:")
+    print(f"    Precision: {metrics['macro avg']['precision']:.4f}")
+    print(f"    Recall: {metrics['macro avg']['recall']:.4f}")
+    print(f"    F1-score: {metrics['macro avg']['f1-score']:.4f}")
+
+# Load the dataset
+data = pd.read_excel("dataset.xlsx")
+
+# Drop columns with missing values
+data.dropna(axis=1, inplace=True)
+
+# Separate features and target variable
+X = data.drop(columns=['target'])
+y = data['target']
+
+# Convert non-numeric columns to strings
+for column in X.columns:
+    if X[column].dtype != 'float64' and X[column].dtype != 'int64':
+        X[column] = X[column].astype(str)
+
+# Perform label encoding for categorical variables
+label_encoder = LabelEncoder()
+for column in X.columns:
+    X[column] = label_encoder.fit_transform(X[column])
+
+# Encode target variable
+y = label_encoder.fit_transform(y)
+
+# Apply SMOTE for oversampling
+smote = SMOTE(random_state=42)
+X_resampled, y_resampled = smote.fit_resample(X, y)
+
+# Convert X_resampled to DataFrame
+X_resampled_df = pd.DataFrame(X_resampled, columns=X.columns)
+
+
+# Initialize individual classifiers
+random_forest = RandomForestClassifier()
+gradient_boosting = GradientBoostingClassifier()
+extra_trees = ExtraTreesClassifier()
+svm = SVC()
+
+# Train RandomForestClassifier to get feature importance
+random_forest.fit(X_resampled_df, y_resampled)
+rf_feature_importance = random_forest.feature_importances_
+
+# Train GradientBoostingClassifier to get feature importance
+gradient_boosting.fit(X_resampled_df, y_resampled)
+gb_feature_importance = gradient_boosting.feature_importances_
+
+# Train ExtraTreesClassifier to get feature importance
+extra_trees.fit(X_resampled_df, y_resampled)
+et_feature_importance = extra_trees.feature_importances_
+
+# Combine feature importance scores from different models
+feature_importance = rf_feature_importance + gb_feature_importance + et_feature_importance
+
+# Select top N features based on importance scores
+N = 20  # Number of features to select
+top_n_features = X_resampled_df.columns[feature_importance.argsort()[-N:][::-1]]
+
+# Train LogisticRegression for RFE
+logistic_regression = LogisticRegression()
+
+# Use RFE for feature selection
+rfe = RFE(estimator=logistic_regression, n_features_to_select=N)
+rfe.fit(X_resampled_df[top_n_features], y_resampled)
+
+# Selected features after RFE
+selected_features = top_n_features[rfe.support_]
+
+# Use only selected features for training
+X_selected = X_resampled_df[selected_features]
+
+# Create the Stacking Classifier
+stacking_classifier = StackingClassifier(estimators=[
+    ('rf', random_forest),
+    ('gb', gradient_boosting),
+    ('et', extra_trees),
+    ('svm', svm),
+], final_estimator=LogisticRegression())
+
+# Initialize list to store cross-validation scores
+cv_scores = []
+
+# Initialize Stratified Shuffle Split
+sss = StratifiedShuffleSplit(n_splits=5, test_size=0.3, random_state=42)
+
+# Perform cross-validation
+for train_index, test_index in sss.split(X_selected, y_resampled):
+    X_train, X_test = X_selected.iloc[train_index], X_selected.iloc[test_index]
+    y_train, y_test = y_resampled[train_index], y_resampled[test_index]
+    
+    # Train the Stacking Classifier
+    stacking_classifier.fit(X_train, y_train)
+    
+    # Predict the labels
+    y_pred = stacking_classifier.predict(X_test)
+    
+    # Calculate accuracy
+    accuracy = accuracy_score(y_test, y_pred)
+    cv_scores.append(accuracy)
+
+# Print cross-validation scores
+print("Cross-validation scores:", cv_scores)
+print("Mean CV score:", sum(cv_scores) / len(cv_scores))
+print_metrics("ensemble:", y_test, y_pred)
+#--------------------------------------------------------------------------------------------------------
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Perform train-test split
+X_train, X_test, y_train, y_test = train_test_split(X_selected, y_resampled, test_size=0.3, random_state=42)
+
+# Train the Stacking Classifier
+stacking_classifier.fit(X_train, y_train)
+
+# Predict the labels
+y_pred = stacking_classifier.predict(X_test)
+
+# Calculate confusion matrix
+cm = confusion_matrix(y_test, y_pred)
+
+# Plot confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, cmap='Blues', fmt='g')
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.show()

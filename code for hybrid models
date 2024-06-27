@@ -1,0 +1,316 @@
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_selection import SelectFromModel
+from xgboost import XGBClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import StackingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import classification_report
+
+# Define function to calculate and print metrics with precision to two decimal points
+def print_metrics(model_name, y_true, y_pred):
+    metrics = classification_report(y_true, y_pred, output_dict=True)
+    print(f"Metrics for {model_name}:")
+    print(f"  Macro Avg:")
+    print(f"    Precision: {metrics['macro avg']['precision']:.4f}")
+    print(f"    Recall: {metrics['macro avg']['recall']:.4f}")
+    print(f"    F1-score: {metrics['macro avg']['f1-score']:.4f}")
+
+# Load the dataset
+data = pd.read_excel("dataset.xlsx")
+
+# Drop columns with missing values
+data.dropna(axis=1, inplace=True)
+data.drop(columns=['patient_id'], inplace=True)
+data.drop(columns=['RADCURE-challenge'], inplace=True)
+
+# Separate features and target variable
+X = data.drop(columns=['target'])
+y = data['target']
+
+# Convert non-numeric columns to strings
+for column in X.columns:
+    if X[column].dtype != 'float64' and X[column].dtype != 'int64':
+        X[column] = X[column].astype(str)
+
+# Perform label encoding for categorical variables
+label_encoder = LabelEncoder()
+for column in X.columns:
+    X[column] = label_encoder.fit_transform(X[column])
+
+# Encode target variable
+y = label_encoder.fit_transform(y)
+
+# Feature selection with XGBoost
+xgb = XGBClassifier()
+xgb.fit(X, y)
+
+# Set the desired number of selected features
+desired_num_features = 7
+
+# Create a feature selector with a custom threshold
+feature_selector = SelectFromModel(xgb, threshold=-float("inf"), max_features=desired_num_features)
+feature_selector.fit(X, y)
+X_selected = feature_selector.transform(X)
+
+# Get selected feature indices
+selected_indices = feature_selector.get_support(indices=True)
+
+# Get selected feature names
+selected_features = X.columns[selected_indices]
+
+# Print the selected feature names
+print("Selected Features:", selected_features)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+#----------------------------------------------------------------------------------------------------------------
+# Define base estimators (logistic regression and decision tree)
+base_estimators = [
+    ('lr', make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))),
+    ('dt', DecisionTreeClassifier())
+]
+
+# Define the meta-classifier (Gradient Boosting)
+meta_classifier = GradientBoostingClassifier()
+
+# Define the stacking classifier
+stacking_classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_classifier)
+
+# Fit the model on the training data
+stacking_classifier.fit(X_train, y_train)
+
+# Predict on the testing data
+y_pred = stacking_classifier.predict(X_test)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print("LR+DT Accuracy:", accuracy)
+print_metrics("LR+DT", y_test, y_pred)
+#--------------------------------------------------------------------------------------------------------------
+# Define base estimators (KNN and decision tree)
+base_estimators = [
+    ('knn', KNeighborsClassifier(n_neighbors=5)),
+    ('dt', DecisionTreeClassifier())
+]
+
+# Define the meta-classifier (Gradient Boosting)
+meta_classifier = GradientBoostingClassifier()
+
+# Define the stacking classifier
+stacking_classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_classifier)
+
+# Fit the model on the training data
+stacking_classifier.fit(X_train, y_train)
+
+# Predict on the testing data
+y_pred = stacking_classifier.predict(X_test)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print("KNN+DT Accuracy:", accuracy)
+# Print metrics for LR+DT
+# Print metrics for KNN+DT
+print_metrics("KNN+DT", y_test, y_pred)
+#--------------------------------------------------------------------------------------------------------------
+# Impute missing values
+imputer = SimpleImputer(strategy='mean')
+X_imputed = imputer.fit_transform(X)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_imputed, y, test_size=0.2, random_state=42)
+
+# Train Naive Bayes classifier
+naive_bayes = GaussianNB()
+naive_bayes.fit(X_train, y_train)
+
+# Get predicted probabilities for training and testing data
+train_probs = naive_bayes.predict_proba(X_train)
+test_probs = naive_bayes.predict_proba(X_test)
+
+# Convert predicted probabilities to DataFrame
+train_probs_df = pd.DataFrame(train_probs, columns=naive_bayes.classes_)
+test_probs_df = pd.DataFrame(test_probs, columns=naive_bayes.classes_)
+
+# Concatenate the predicted probabilities with original features
+X_train_with_probs = pd.concat([pd.DataFrame(X_train), train_probs_df.reset_index(drop=True)], axis=1)
+X_test_with_probs = pd.concat([pd.DataFrame(X_test), test_probs_df.reset_index(drop=True)], axis=1)
+
+# Convert all feature names to strings
+X_train_with_probs.columns = X_train_with_probs.columns.astype(str)
+X_test_with_probs.columns = X_test_with_probs.columns.astype(str)
+
+# Define base estimators (Random Forest)
+base_estimators = [
+    ('rf', RandomForestClassifier())
+]
+
+# Define the meta-classifier (Gradient Boosting)
+meta_classifier = GradientBoostingClassifier()
+
+# Define the stacking classifier
+stacking_classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_classifier)
+
+# Fit the model on the training data
+stacking_classifier.fit(X_train_with_probs, y_train)
+
+# Predict on the testing data
+y_pred = stacking_classifier.predict(X_test_with_probs)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print("NB+RF Accuracy:", accuracy)
+print_metrics("NB+RF", y_test, y_pred)
+#------------------------------------------------------------------------------------
+# Initialize individual classifiers
+decision_tree = DecisionTreeClassifier()
+svm= SVC()
+
+# Create the Voting Classifier
+voting_classifier = VotingClassifier(estimators=[
+    ('dt', decision_tree),
+    ('svm', svm)
+], voting='hard')
+
+# Train the Voting Classifier
+voting_classifier.fit(X_train, y_train)
+
+# Predict the labels
+y_pred = voting_classifier.predict(X_test)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print("SVM+DT Accuracy:", accuracy)
+print_metrics("SVM+DT", y_test, y_pred)
+#----------------------------------------------------------------------------------
+# Initialize individual classifiers
+random_forest = RandomForestClassifier()
+svm= SVC()
+
+# Create the Voting Classifier
+voting_classifier = VotingClassifier(estimators=[
+    ('rf', random_forest),
+    ('svm', svm)
+], voting='hard')
+
+# Train the Voting Classifier
+voting_classifier.fit(X_train, y_train)
+
+# Predict the labels
+y_pred = voting_classifier.predict(X_test)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print("SVM+RF Accuracy:", accuracy)
+print_metrics("SVM+RF", y_test, y_pred)
+#-------------------------------------------------------------------------------------
+# Initialize individual classifiers
+logistic_regression = LogisticRegression(max_iter=1000)
+random_forest = RandomForestClassifier(n_estimators=100, max_depth=10)  # Adjust hyperparameters
+decision_tree = DecisionTreeClassifier(max_depth=5)  # Adjust hyperparameters
+naive_bayes = GaussianNB()
+knn = KNeighborsClassifier(n_neighbors=5)  # Adjust hyperparameters
+svm = SVC()  # Adjust hyperparameters
+
+# Create the Voting Classifier
+voting_classifier = VotingClassifier(estimators=[
+    ('lr', logistic_regression), 
+    ('rf', random_forest), 
+    ('dt', decision_tree),
+    ('nb', naive_bayes),
+    ('knn', knn),
+    ('svm', svm)
+], voting='hard')
+
+# Train the Voting Classifier
+voting_classifier.fit(X_train, y_train)
+
+# Predict the labels
+y_pred = voting_classifier.predict(X_test)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print("ENSEMBLE Accuracy:", accuracy)
+#-------------------------------------------------------------------------------------
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Define the accuracy scores obtained from different classifiers
+accuracy_scores = {
+    'LR+DT': 0.83,
+    'KNN+DT': 0.84,
+    'NB+RF': 0.85,
+    'SVM+DT': 0.83,
+    'SVM+RF': 0.85,
+    'Ensemble': 0.92
+}
+
+# Convert accuracy_scores to a DataFrame for heatmap
+accuracy_df = pd.DataFrame.from_dict(accuracy_scores, orient='index', columns=['Accuracy'])
+
+# Plot heatmap
+plt.figure(figsize=(8, 6))
+sns.heatmap(accuracy_df, annot=True, cmap='coolwarm', fmt=".2f", cbar=False)
+plt.title('Classifier Accuracy Heatmap')
+plt.xlabel('Accuracy')
+plt.ylabel('Classifier Combination')
+plt.xticks(rotation=45)
+plt.show()
+# Load the dataset
+data = pd.read_excel("dataset.xlsx")
+
+# Drop columns with missing values
+data.dropna(axis=1, inplace=True)
+data.drop(columns=['patient_id'], inplace=True)
+data.drop(columns=['RADCURE-challenge'], inplace=True)
+
+# Convert non-numeric columns to strings
+for column in data.columns:
+    if data[column].dtype != 'float64' and data[column].dtype != 'int64':
+        data[column] = data[column].astype(str)
+
+# Perform label encoding for categorical variables
+label_encoder = LabelEncoder()
+for column in data.columns:
+    data[column] = label_encoder.fit_transform(data[column])
+
+# Compute the correlation matrix
+correlation_matrix = data.corr()
+
+# Plot heatmap
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f", cbar=True)
+plt.title('Correlation Heatmap of Numeric Features')
+plt.show()
+#-------------------------------------------------------------------------------------------------
+
+
+# Print metrics for LR+DT
+print_metrics("LR+DT", y_test, y_pred)
+
+# Print metrics for KNN+DT
+print_metrics("KNN+DT", y_test, y_pred)
+
+# Print metrics for NB+RF
+print_metrics("NB+RF", y_test, y_pred)
+
+# Print metrics for SVM+DT
+print_metrics("SVM+DT", y_test, y_pred)
+
+# Print metrics for SVM+RF
+print_metrics("SVM+RF", y_test, y_pred)
